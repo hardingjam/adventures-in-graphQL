@@ -67,6 +67,16 @@ const DirectorType = new GraphQLObjectType({
     fields: () => ({
         id: { type: GraphQLNonNull(GraphQLInt) },
         name: { type: GraphQLNonNull(GraphQLString) },
+        // In order for our director objects to contain their works, we need to include a list of FilmTypes...
+        films: {
+            type: new GraphQLList(FilmType),
+            // ... because our directors will likely have directed more than one film, we can use a filter function to return to return them as an array.
+            resolve: (director) => {
+                return films.filter(
+                    (director) => film.directorId === director.id
+                );
+            },
+        },
     }),
 });
 
