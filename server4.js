@@ -27,31 +27,16 @@ const films = [
     { id: 6, name: "Punch Drunk Love", directorId: 2 },
 ];
 
-/** THE OBJECT TYPE ***/
-/** This is where I define the expected structure of each FilmType object. ***/
-
 const FilmType = new GraphQLObjectType({
-    // Name and description are self-explanatory
     name: "Film",
     description: "This represents a film with a director",
-    // Each FilmType object will include the following fields.
-    // To begin with, it will reflect the data structure in my hard-coded films array.
     fields: () => ({
-        // An index number which is NOT NULL (think SQL notation)...
         id: { type: GraphQLNonNull(GraphQLInt) },
-        // ... a name which is NOT NULL...
         name: { type: GraphQLNonNull(GraphQLString) },
-        // ...and a directorId.
         directorId: { type: GraphQLNonNull(GraphQLInt) },
-        // Now, this is where it gets interesting. We want to make things relational, so that we can access the director for each film, even though they exist in a separate "database".
         director: {
-            // We will need to create another type!
             type: DirectorType,
-            // Because our film objects don't include directors (just their ID), we need to use a resolve function to access the information in the directors array.
-            // Resolve takes a "parent property", which is whatever film is being queried.
             resolve: (film) => {
-                // It returns the director whose ID matches the directorID of the film.
-                // I'm using find, not filter, since the first match will be enough.
                 return directors.find(
                     (director) => director.id === film.directorId
                 );
@@ -60,17 +45,15 @@ const FilmType = new GraphQLObjectType({
     }),
 });
 
-// Once I define a DirectorType, I can use it to populate the results of my films query.
 const DirectorType = new GraphQLObjectType({
     name: "Director",
     description: "This represents a director of a film",
+    // We MUST use functions, not objects, to define our types. Otherwise they will not be hoisted when they're compiled, and will not be able to "read" each other properly.
     fields: () => ({
         id: { type: GraphQLNonNull(GraphQLInt) },
         name: { type: GraphQLNonNull(GraphQLString) },
-        // In order for our director objects to contain their works, we need to include a list of FilmTypes...
         films: {
             type: new GraphQLList(FilmType),
-            // ... because our directors will likely have directed more than one film, we can use a filter function to return to return them as an array.
             resolve: (director) => {
                 return films.filter((film) => film.directorId === director.id);
             },
@@ -80,38 +63,52 @@ const DirectorType = new GraphQLObjectType({
 
 const RootQueryType = new GraphQLObjectType({
     name: "Query",
-    // A descriptive name will appear in our docs, and tell us that this is the top level
     description: "Root Query",
-    // This is where we define our fields
     fields: () => ({
+        // What if I want to search for just one film?
+        film: {
+            // I no longer need to use the list constructor
+            type: FilmType,
+            description: "A single film",
+            // ...but I need to include an arguments object to define which arguments are valid for our query.
+            // They will be the arguments I would use in GraphiQL inside of round braces e.g.  {film(id: 1){name}}
+            args: {
+                id: { type: GraphQLInt },
+            },
+            // In this case, the query resolves by finding the film with the id that I passed as an argument.
+            // If I had a database, I would do database queries in order to get this information.
+            resolve: (parent, args) =>
+                films.find((film) => film.id === args.id),
+        },
         films: {
-            // We've imported GraphQLLists, and we can wrap our FilmType inside it to make a list of FilmTypes.
             type: new GraphQLList(FilmType),
             description: "A list of all the films",
-            // Here I am using a super simple implicit return, which is my entire hard-coded list of films.
-            // If I had a database, I would query it here.
             resolve: () => films,
         },
+
+        director: {
+            type: DirectorType,
+            description: "A single director",
+            args: {
+                id: { type: GraphQLInt },
+            },
+            resolve: (parent, args) =>
+                directors.find((director) => director.id === args.id),
+        },
         directors: {
-            // Just like the films field, here we wrap our DirectorType inside a new GraphQLList.
             type: new GraphQLList(DirectorType),
             description: "A list of all the directors",
-            // Providing the hard-coded directors array.
             resolve: () => directors,
         },
     }),
 });
 
-// Whatever is defined here will be used by my graphiql middleware.
 const schema = new GraphQLSchema({ query: RootQueryType });
-
-//Middleware to insist on using graphiql.
 
 app.use(
     "/graphql",
     graphqlHTTP({
         schema: schema,
-        // rootValue: root,
         graphiql: true,
     })
 );
